@@ -98,6 +98,11 @@
 	                             title="${%Generate a heap dump}">
 	                    <b style="color:orange">${%Warning!}</b> ${%This operation may affect performance of the node}
 	                </local:feature>
+	                <local:feature icon="${it.monitoringUrl}?resource=user-trash.png"
+	                               href="${it.monitoringUrl}?action=invalidate_anonymous_sessions${it.csrfTokenUrlPart}"
+	                               title="${%Invalidate anonymous http sessions}">
+	                    ${%Invalidate all anonymous http sessions on the node}
+	                </local:feature>
 	            </table>
             </l:isAdmin>
         </l:main-panel>

@@ -34,6 +34,7 @@ import net.bull.javamelody.internal.common.HttpParameter;
 import net.bull.javamelody.internal.common.HttpPart;
 import net.bull.javamelody.internal.common.I18N;
 import net.bull.javamelody.internal.model.Action;
+import net.bull.javamelody.internal.model.SessionInformations;
 import net.bull.javamelody.internal.model.Collector;
 import net.bull.javamelody.internal.model.HeapHistogram;
 import net.bull.javamelody.internal.model.JavaInformations;
@@ -101,6 +102,25 @@ public class NodesController {
 				final String partParameter = HttpParameter.PART.getParameterFrom(req);
 				final String actionParameter = HttpParameter.ACTION.getParameterFrom(req);
 				if (actionParameter != null) {
+					// handle custom action for invalidating anonymous sessions
+					if ("invalidate_anonymous_sessions".equalsIgnoreCase(actionParameter)) {
+						final String messageForReport = invalidateAnonymousSessions();
+						if (TransportFormat
+								.isATransportFormat(HttpParameter.FORMAT.getParameterFrom(req))) {
+							final SerializableController serializableController = new SerializableController(
+									collector);
+							final Range range = serializableController.getRangeForSerializable(req);
+							final List<JavaInformations> javaInformationsList = new ArrayList<>(
+									getRemoteCallHelper().collectJavaInformationsListByName().values());
+							final Serializable serializable = serializableController
+									.createDefaultSerializable(javaInformationsList, range,
+											messageForReport);
+							monitoringController.doCompressedSerializable(req, resp, serializable);
+						} else {
+							writeMessage(resp, messageForReport, partParameter);
+						}
+						return;
+					}
 					final Action action = Action.valueOfIgnoreCase(actionParameter);
 					final String messageForReport;
 					if (action != Action.CLEAR_COUNTER && action != Action.PURGE_OBSOLETE_FILES
@@ -365,6 +385,23 @@ public class NodesController {
 		MonitoringController.noCache(httpResponse);
 		httpResponse.setContentType("text/html; charset=UTF-8");
 		return new PrintWriter(HtmlController.getWriter(httpResponse));
+	}
+
+	/**
+	 * Invalidate all anonymous HTTP sessions (sessions without a remoteUser).
+	 * @return message for report
+	 */
+	private String invalidateAnonymousSessions() {
+		final List<SessionInformations> sessions = SessionListener.getAllSessionsInformations();
+		int count = 0;
+		for (final SessionInformations session : sessions) {
+			final String remoteUser = session.getRemoteUser();
+			if (remoteUser == null || remoteUser.trim().isEmpty()) {
+				SessionListener.invalidateSession(session.getId());
+				count++;
+			}
+		}
+		return count + " anonymous session(s) invalidated";
 	}
 
 	private RemoteCallHelper getRemoteCallHelper() {
